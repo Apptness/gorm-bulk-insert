@@ -99,7 +99,7 @@ func Test_insertObject(t *testing.T) {
 		sqlmock.NewResult(1, 1),
 	)
 
-	err = insertObjSet(gdb, []interface{}{
+	err = insertObjSet(GormBulkOpt{}, gdb, []interface{}{
 		Table{
 			RegularColumn: "first regular",
 			Custom:        "first custom",

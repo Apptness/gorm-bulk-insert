@@ -14,6 +14,18 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+type GormBulkOpt struct {
+	Ignore bool
+}
+
+func BulkInsert(db *gorm.DB, objects []interface{}, chunkSize int, excludeColumns ...string) error {
+	return BulkInsert_(GormBulkOpt{}, db, objects, chunkSize, excludeColumns...)
+}
+
+func BulkInsertIgnore(db *gorm.DB, objects []interface{}, chunkSize int, excludeColumns ...string) error {
+	return BulkInsert_(GormBulkOpt{Ignore: true}, db, objects, chunkSize, excludeColumns...)
+}
+
 // BulkInsert executes the query to insert multiple records at once.
 //
 // [objects] must be a slice of struct.
@@ -22,17 +34,17 @@ import (
 // and exceeds the limit of prepared statement. Larger size normally leads to better performance, in most cases 2000 to 3000 is reasonable.
 //
 // [excludeColumns] is column names to exclude from insert.
-func BulkInsert(db *gorm.DB, objects []interface{}, chunkSize int, excludeColumns ...string) error {
+func BulkInsert_(opt GormBulkOpt, db *gorm.DB, objects []interface{}, chunkSize int, excludeColumns ...string) error {
 	// Split records with specified size not to exceed Database parameter limit
 	for _, objSet := range splitObjects(objects, chunkSize) {
-		if err := insertObjSet(db, objSet, excludeColumns...); err != nil {
+		if err := insertObjSet(opt, db, objSet, excludeColumns...); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func insertObjSet(db *gorm.DB, objects []interface{}, excludeColumns ...string) error {
+func insertObjSet(opt GormBulkOpt, db *gorm.DB, objects []interface{}, excludeColumns ...string) error {
 	if len(objects) == 0 {
 		return nil
 	}
@@ -91,7 +103,15 @@ func insertObjSet(db *gorm.DB, objects []interface{}, excludeColumns ...string) 
 		insertOption = strVal
 	}
 
-	mainScope.Raw(fmt.Sprintf("INSERT INTO %s (%s) VALUES %s %s",
+	var insertStyle string
+	if opt.Ignore {
+		insertStyle = "INSERT IGNORE"
+	} else {
+		insertStyle = "INSERT"
+	}
+
+	mainScope.Raw(fmt.Sprintf("%s INTO %s (%s) VALUES %s %s",
+		insertStyle,
 		mainScope.QuotedTableName(),
 		strings.Join(dbColumns, ", "),
 		strings.Join(placeholders, ", "),
